@@ -1,17 +1,17 @@
 /**
-  Network header file
+  UDP Port Handler header file
 	
   Company:
     Microchip Technology Inc.
 
   File Name:
-    network.h
+    udpv4_port_handler_table.h
 
   Summary:
-    Header file for network helper.
+    This is the header file udpv4.c
 
   Description:
-    This header file provides the API for the network helper.
+    This file consists of the UDP call back table.
 
  */
 
@@ -37,29 +37,23 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 
 */
 
-#ifndef NETWORK_H
-#define	NETWORK_H
 
-#include <stdint.h>
+#ifndef UDPV4_PORT_HANDLER_TABLE_H
+#define	UDPV4_PORT_HANDLER_TABLE_H
+
 #include "tcpip_types.h"
 
-#define byteSwap16(a) ((((uint16_t)a & (uint16_t)0xFF00) >> 8) | (((uint16_t)a & (uint16_t)0x00FF) << 8))
-#define byteReverse32(a) ((((uint32_t)a&(uint32_t)0xff000000) >> 24) | \
-                          (((uint32_t)a&(uint32_t)0x00ff0000) >>  8) | \
-                          (((uint32_t)a&(uint32_t)0x0000ff00) <<  8) | \
-                          (((uint32_t)a&(uint32_t)0x000000ff) << 24) )
+typedef struct
+{
+    uint16_t portNumber;
+    ip_receive_function_ptr callBack;
+} udp_handler_t;
 
-// host to network & network to host macros
-#define htons(a) byteSwap16(a)
-#define ntohs(a) byteSwap16(a)
-#define htonl(a) byteReverse32(a)
-#define ntohl(a) byteReverse32(a)
+typedef  udp_handler_t * udp_table_iterator_t;
 
-void Network_Init(void);
-void Network_Read(void);
-void Network_Manage(void);
-void Network_WaitForLink(void);
-void timersInit();
+udp_table_iterator_t udp_table_getIterator(void);
+udp_table_iterator_t udp_table_nextEntry(udp_table_iterator_t i);
 
-#endif	/* NETWORK_H */
+#endif	/* UDPV4_PORT_HANDLER_TABLE_H */
+
 

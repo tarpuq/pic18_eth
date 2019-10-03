@@ -65,11 +65,11 @@ void TMR1_Initialize(void)
 {
     //Set the Timer to the options selected in the GUI
 	
-	// TMR1H 0; 
-		TMR1H = 0x00;
+	// TMR1H 11; 
+		TMR1H = 0x0B;
 	
-	// TMR1L 0; 
-		TMR1L = 0x00;
+	// TMR1L 220; 
+		TMR1L = 0xDC;
 
     // Load the TMR value to reload variable
     timer1ReloadVal=TMR1;
@@ -144,17 +144,32 @@ void TMR1_Reload(void)
 
 void TMR1_ISR(void)
 {
+    static volatile uint16_t CountCallBack = 0;
 
     // Clear the TMR1 interrupt flag
     PIR1bits.TMR1IF = 0;    
     TMR1_WriteTimer(timer1ReloadVal);
+
+    // callback function - called every 100th pass
+    if (++CountCallBack >= TMR1_INTERRUPT_TICKER_FACTOR)
+    {
+        // ticker function call
+        TMR1_CallBack();
+
+        // reset ticker counter
+        CountCallBack = 0;
+    }
+}
+
+void TMR1_CallBack(void)
+{
+    // Add your custom callback code here
 
     if(TMR1_InterruptHandler)
     {
         TMR1_InterruptHandler();
     }
 }
-
 
 void TMR1_SetInterruptHandler(void (* InterruptHandler)(void)){
     TMR1_InterruptHandler = InterruptHandler;

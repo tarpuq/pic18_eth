@@ -150,7 +150,7 @@ error_msg ICMP_PortUnreachable(uint32_t srcIPAddress,uint32_t destIPAddress, uin
         ETH_Write16(DEST_PORT_UNREACHABLE);
         ETH_Write16(0); // checksum
         ETH_Write32(0); //unused and next-hop
-        ETH_SetReadPtr(Network_GetStartPosition());
+        ETH_SetReadPtr(IPV4_GetStartPosition());
         ETH_Copy(sizeof(ipv4Header_t) + length);
         cksm = ETH_TxComputeChecksum(sizeof(ethernetFrame_t) + sizeof(ipv4Header_t),  sizeof(icmpHeader_t)+ sizeof(ipv4Header_t) + length, 0);
         ETH_Insert((char *)&cksm,sizeof(cksm),sizeof(ethernetFrame_t) + sizeof(ipv4Header_t) + offsetof(icmpHeader_t,checksum));

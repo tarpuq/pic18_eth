@@ -67,6 +67,34 @@
 #define PULL_UP_ENABLED      1
 #define PULL_UP_DISABLED     0
 
+// get/set LEDA aliases
+#define LEDA_TRIS                 TRISAbits.TRISA0
+#define LEDA_LAT                  LATAbits.LATA0
+#define LEDA_PORT                 PORTAbits.RA0
+#define LEDA_ANS                  anselRA0bits.anselRA0
+#define LEDA_SetHigh()            do { LATAbits.LATA0 = 1; } while(0)
+#define LEDA_SetLow()             do { LATAbits.LATA0 = 0; } while(0)
+#define LEDA_Toggle()             do { LATAbits.LATA0 = ~LATAbits.LATA0; } while(0)
+#define LEDA_GetValue()           PORTAbits.RA0
+#define LEDA_SetDigitalInput()    do { TRISAbits.TRISA0 = 1; } while(0)
+#define LEDA_SetDigitalOutput()   do { TRISAbits.TRISA0 = 0; } while(0)
+#define LEDA_SetAnalogMode()      do { anselRA0bits.anselRA0 = 1; } while(0)
+#define LEDA_SetDigitalMode()     do { anselRA0bits.anselRA0 = 0; } while(0)
+
+// get/set LEDB aliases
+#define LEDB_TRIS                 TRISAbits.TRISA1
+#define LEDB_LAT                  LATAbits.LATA1
+#define LEDB_PORT                 PORTAbits.RA1
+#define LEDB_ANS                  anselRA1bits.anselRA1
+#define LEDB_SetHigh()            do { LATAbits.LATA1 = 1; } while(0)
+#define LEDB_SetLow()             do { LATAbits.LATA1 = 0; } while(0)
+#define LEDB_Toggle()             do { LATAbits.LATA1 = ~LATAbits.LATA1; } while(0)
+#define LEDB_GetValue()           PORTAbits.RA1
+#define LEDB_SetDigitalInput()    do { TRISAbits.TRISA1 = 1; } while(0)
+#define LEDB_SetDigitalOutput()   do { TRISAbits.TRISA1 = 0; } while(0)
+#define LEDB_SetAnalogMode()      do { anselRA1bits.anselRA1 = 1; } while(0)
+#define LEDB_SetDigitalMode()     do { anselRA1bits.anselRA1 = 0; } while(0)
+
 
 /**
    @Param

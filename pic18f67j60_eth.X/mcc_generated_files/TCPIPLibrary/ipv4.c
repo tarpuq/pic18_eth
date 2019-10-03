@@ -44,13 +44,17 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 #include "ipv4.h"
 #include "icmp.h"
 #include "arpv4.h"
+#include "udpv4.h"
+#include "udpv4_port_handler_table.h"
 #include "tcpv4.h"
 #include "tcpip_types.h"
 #include "ethernet_driver.h"
 #include "ip_database.h"
 
 uint32_t remoteIpv4Address;
+uint16_t ipv4StartPosition;
 ipv4Header_t ipv4Header;
+static void IPV4_SaveStartPosition(void);
 
 
 /*
@@ -109,6 +113,7 @@ error_msg IPV4_Packet(void)
         return IPV4_CHECKSUM_FAILS;
     }
     
+    IPV4_SaveStartPosition();
     ETH_ReadBlock((char *)&ipv4Header, sizeof(ipv4Header_t));
     if(ipv4Header.version != 4)
     {
@@ -164,6 +169,13 @@ error_msg IPV4_Packet(void)
                         return ICMP_CHECKSUM_FAILS;
                     }
                 }
+                break;
+            case UDP_TCPIP:
+                // check the UDP header checksum
+                length = ipv4Header.length - hdrLen;
+                cksm = IPV4_PseudoHeaderChecksum(length);//Calculate pseudo header checksum
+                cksm = ETH_RxComputeChecksum(length, cksm); //1's complement of pseudo header checksum + 1's complement of UDP header, data
+                UDP_Receive(cksm);
                 break;
             case TCP_TCPIP:
                 // accept only uni cast TCP packets
@@ -266,6 +278,17 @@ error_msg IPV4_Send(uint16_t payloadLength)
 
     return ret;
 }
+
+static void IPV4_SaveStartPosition(void)
+{
+    ipv4StartPosition = ETH_GetReadPtr();
+}
+
+uint16_t IPV4_GetStartPosition(void)
+{    
+    return ipv4StartPosition;
+}
+
 
 uint16_t IPV4_GetDatagramLength(void)
 {

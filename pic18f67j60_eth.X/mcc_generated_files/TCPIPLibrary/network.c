@@ -50,8 +50,6 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 #include "ip_database.h"
 
 time_t arpTimer;
-static void Network_SaveStartPosition(void);
-uint16_t networkStartPosition;
 
 void Network_Init(void)
 {
@@ -109,7 +107,6 @@ void Network_Read(void)
         ETH_NextPacketUpdate();
         ETH_ReadBlock((char *)&header, sizeof(header));
         header.id.type = ntohs(header.id.type); // reverse the type field
-        Network_SaveStartPosition();
         switch (header.id.type)
         {
             case ETHERTYPE_VLAN:
@@ -127,14 +124,4 @@ void Network_Read(void)
         }        
         ETH_Flush();
     }
-}
-
-static void Network_SaveStartPosition(void)
-{
-    networkStartPosition = ETH_GetReadPtr();
-}
-
-uint16_t Network_GetStartPosition(void)
-{    
-    return networkStartPosition;
 }

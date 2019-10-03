@@ -12,23 +12,24 @@
                        projectFiles="true">
           <itemPath>mcc_generated_files/TCPIPLibrary/icmp.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/ip_database.h</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/syslog.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/lfsr.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/ipv4.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/network.h</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/tcpip_types.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/arpv4.h</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/tcpip_types.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/rtcc.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/tcpip_config.h</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/ethernet_driver.h</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/mac_address.h</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/tcpv4.h</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/mac_address.h</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/udpv4_port_handler_table.h</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/udpv4.h</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/syslog.h</itemPath>
         </logicalFolder>
         <itemPath>mcc_generated_files/mcc.h</itemPath>
         <itemPath>mcc_generated_files/pin_manager.h</itemPath>
-        <itemPath>mcc_generated_files/device_config.h</itemPath>
         <itemPath>mcc_generated_files/tmr1.h</itemPath>
         <itemPath>mcc_generated_files/interrupt_manager.h</itemPath>
+        <itemPath>mcc_generated_files/device_config.h</itemPath>
       </logicalFolder>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
@@ -44,23 +45,25 @@
         <logicalFolder name="TCPIPLibrary"
                        displayName="TCPIPLibrary"
                        projectFiles="true">
+          <itemPath>mcc_generated_files/TCPIPLibrary/ETHxxJ6x_driver.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/ip_database.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/icmp.c</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/syslog.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/lfsr.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/network.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/arpv4.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/rtcc.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/ipv4.c</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/mac_address.c</itemPath>
           <itemPath>mcc_generated_files/TCPIPLibrary/tcpv4.c</itemPath>
-          <itemPath>mcc_generated_files/TCPIPLibrary/ETHxxJ6x_driver.c</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/mac_address.c</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/udpv4_port_handler_table.c</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/udpv4.c</itemPath>
+          <itemPath>mcc_generated_files/TCPIPLibrary/syslog.c</itemPath>
         </logicalFolder>
         <itemPath>mcc_generated_files/mcc.c</itemPath>
         <itemPath>mcc_generated_files/pin_manager.c</itemPath>
-        <itemPath>mcc_generated_files/device_config.c</itemPath>
         <itemPath>mcc_generated_files/tmr1.c</itemPath>
         <itemPath>mcc_generated_files/interrupt_manager.c</itemPath>
+        <itemPath>mcc_generated_files/device_config.c</itemPath>
       </logicalFolder>
       <itemPath>main.c</itemPath>
     </logicalFolder>
@@ -221,7 +224,7 @@
         <property key="communication.interface"
                   value="${communication.interface.default}"/>
         <property key="communication.speed" value="${communication.speed.default}"/>
-        <property key="debugoptions.useswbreakpoints" value="false"/>
+        <property key="debugoptions.useswbreakpoints" value="true"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="true"/>
         <property key="memories.configurationmemory" value="true"/>
