@@ -1,5 +1,3 @@
-// rtcc.h
-
 /*********************************************************************
 * Software License Agreement:
 *
@@ -22,7 +20,7 @@
 * CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 *********************************************************************/
 #ifndef __RTCC_H
-    #define __RTCC_H
+#define __RTCC_H
 
 
 #include <time.h>
@@ -31,8 +29,11 @@
 void    rtcc_init(void);
 void    rtcc_handler(void);
 void    rtcc_set(time_t *);
+bool rtcc_isDirty(void);
+time_t rtcc_get(void);
 
-/* implement the time(&t) function for the standard libraries */
+
+extern volatile bool dirtyTime;
 
 /* time.h does not implment time as it is application dependent */
 time_t  time(time_t *t);

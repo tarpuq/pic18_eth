@@ -11,8 +11,8 @@
     Public Interface definition for Ethernet driver.    
 
   Description:
-  This files include definitions of public interface for an Ethernet driver.
-  See individual Ethernet drivers for specific implementations of this interface.
+  This files include definitions of public interface for an ethernet driver.
+  See individual ethernet drivers for specific implementations of this interface.
 
  */
 
@@ -74,12 +74,21 @@ typedef struct
 	unsigned up:1;
 	unsigned idle:1;
 	unsigned linkChange:1;
-	unsigned bufferBusy:1;
-	unsigned :2;
-        uint16_t TXPacketSize;
+        unsigned bufferBusy:1;
+        unsigned :3;
         uint16_t saveRDPT;
         uint16_t saveWRPT;
 } ethernetDriver_t;
+
+typedef struct 
+{
+    uint16_t flags;
+    uint16_t packetStart;
+    uint16_t packetEnd;
+
+    void    *prevPacket;
+    void    *nextPacket;
+} txPacket_t;
 
 extern volatile ethernetDriver_t ethData;
 
@@ -87,7 +96,7 @@ extern volatile ethernetDriver_t ethData;
 #define ETH_linkCheck()   ethData.up
 #define ETH_linkChanged() ethData.linkChange
 
-void ETH_Init(void);            // setup the Ethernet and get it running
+void ETH_Init(void);            // setup the ethernet and get it running
 void ETH_EventHandler(void);    // Manage the MAC events.  Poll this or put it in the ISR
 void ETH_NextPacketUpdate();    // Update the pointers for the next available RX packets
 void ETH_ResetReceiver(void);   // Reset the receiver
@@ -97,16 +106,19 @@ void ETH_SendSystemReset(void); // Reset the transmitter
 uint16_t ETH_ReadBlock(void*, uint16_t); // read a block of data from the MAC
 uint8_t ETH_Read8(void);                 // read 1 byte from the MAC
 uint16_t ETH_Read16(void);               // read 2 bytes and return them in host order
+uint32_t ETH_Read24(void);              // read 3 bytes and return them in host order
 uint32_t ETH_Read32(void);               // read 4 bytes and return them in host order
 void ETH_Dump(uint16_t);                 // drop N bytes from a packet (data is lost)
 void ETH_Flush(void);                    // drop the rest of this packet and release the buffer
 
+uint16_t ETH_GetFreeTxBufferSize(void);                         // returns the available space size in the TX buffer
+
 error_msg ETH_WriteStart(const mac48Address_t *dest_mac, uint16_t type);
-uint16_t ETH_WriteString(const char *string);                      // write a string of data into the MAC
-uint16_t ETH_WriteBlock(void *, uint16_t);                         // write a block of data into the MAC
+uint16_t ETH_WriteString(const char *string);                            // write a string of data into the MAC
+uint16_t ETH_WriteBlock(const void *, uint16_t);                         // write a block of data into the MAC
 void ETH_Write8(uint8_t);                                          // write a byte into the MAC
 void ETH_Write16(uint16_t);                                        // write 2 bytes into the MAC in Network order
-void ETH_Write24(uint24_t data);                                   // write 3 bytes into the MAC in Network order
+void ETH_Write24(uint32_t data);                                   // write 3 bytes into the MAC in Network order
 void ETH_Write32(uint32_t);                                        // write 4 bytes into the MAC in Network order
 void ETH_Insert(char *,uint16_t, uint16_t);                        // insert N bytes into a specific offset in the TX packet
 error_msg ETH_Copy(uint16_t);                                      // copy N bytes from saved read location into the current tx location
@@ -117,8 +129,9 @@ uint16_t ETH_RxComputeChecksum(uint16_t len, uint16_t seed);
 
 void ETH_GetMAC(uint8_t *);            // get the MAC address
 void ETH_SetMAC(uint8_t *);            // set the MAC address
-
+uint16_t ETH_GetWritePtr();
 void ETH_SaveRDPT(void);               // save the receive pointer for copy
+void ETH_ResetReadPtr();               //Reset the receive pointer to the Init
 uint16_t ETH_GetReadPtr(void);         //returns the value of the read pointer
 void ETH_SetReadPtr(uint16_t);         //sets the read pointer to a specific address
 uint16_t ETH_GetStatusVectorByteCount(void);
@@ -129,10 +142,14 @@ uint16_t ETH_GetByteCount(void);
 
 uint16_t ETH_ReadSavedWRPT(void);
 void ETH_SaveWRPT(void);
+void ETH_SetRxByteCount(uint16_t count);
+uint16_t ETH_GetRxByteCount();
 
 bool ETH_CheckLinkUp();
 
 void ETH_TxReset(void);
+void ETH_MoveBackReadPtr(uint16_t offset);
+
 
 #endif	/* ETHERNET_DRIVER_H */
 

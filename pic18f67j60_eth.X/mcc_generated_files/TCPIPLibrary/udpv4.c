@@ -40,6 +40,7 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 #include <stdio.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <conio.h>   // jira:M8TS-608
 #include "ipv4.h"
 #include "udpv4.h"
 #include "udpv4_port_handler_table.h"
@@ -91,7 +92,7 @@ error_msg UDP_Start(uint32_t destIP, uint16_t srcPort, uint16_t dstPort)
     return ret;
 }
 
-error_msg UDP_Send()
+error_msg UDP_Send(void)
 {
     uint16_t udpLength;
     uint16_t cksm;
@@ -122,7 +123,6 @@ error_msg UDP_Receive(uint16_t udpcksm) // catch all UDP packets and dispatch th
 {
     error_msg ret = ERROR;
     udp_table_iterator_t  hptr;
-    uint16_t x;
 
     ETH_ReadBlock((char *)&udpHeader,sizeof(udpHeader));
 
@@ -153,7 +153,7 @@ error_msg UDP_Receive(uint16_t udpcksm) // catch all UDP packets and dispatch th
         {
             
             //Send Port unreachable                
-            ICMP_PortUnreachable(UDP_GetSrcIP(), UDP_GetDestIP(),(sizeof(udp_handler_t) + (udpHeader.length)));
+            ICMP_PortUnreachable(UDP_GetSrcIP(), UDP_GetDestIP(), DEST_UNREACHABLE_LEN);  //jira: CAE_MCU8-5706
         }
     }
     else

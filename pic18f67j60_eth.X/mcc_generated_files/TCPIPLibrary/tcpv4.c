@@ -38,7 +38,6 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 */
 
 #include <stdio.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 #include "ipv4.h"
@@ -46,6 +45,7 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 #include "network.h"
 #include "ethernet_driver.h"
 #include "tcpip_types.h"
+#include "log.h"
 #include "tcpip_config.h"
 #include "icmp.h"
 
@@ -61,7 +61,22 @@ static uint32_t receivedRemoteAddress;
 static uint16_t rcvPayloadLen;
 static uint16_t tcpMss = 536;
 
-static bool TCP_FiniteStateMachine(void);
+//jira: CAE_MCU8-6056
+static uint16_t tcpDataLength;
+static uint16_t bytesToSendForRetransmit = 0;
+static uint8_t *txBufferPtrForRetransmit;
+static uint32_t localSeqnoForRetransmit;
+static uint32_t lastAckNumber;
+
+#ifdef ENABLE_NETWORK_DEBUG
+#define logMsg(msg, msgSeverity, msgLogDest)    logMessage(msg, LOG_KERN, msgSeverity, msgLogDest)  
+#else
+#define logMsg(msg, msgSeverity, msgLogDest)
+#endif
+
+static error_msg TCP_FiniteStateMachine(void);  //jira: CAE_MCU8-5647
+
+static error_msg TCP_TimoutRetransmit(void);
 
 /** The function will insert a pointer to the new TCB into the TCB pointer list.
  *
@@ -155,10 +170,10 @@ static void TCB_Reset(tcpTCB_t *tcbPtr)
  * @return
  *      None
  */
-static bool TCB_Check(tcpTCB_t *ptr)
+static error_msg TCB_Check(tcpTCB_t *ptr)   //jira: CAE_MCU8-5647
 {
     tcpTCB_t *tcbPtr;
-    bool ret = false;
+    error_msg ret = ERROR;    //jira: CAE_MCU8-5647
     socklistsize_t count = 0;
     
     if((tcbList != NULL) && (ptr != NULL))
@@ -169,7 +184,7 @@ static bool TCB_Check(tcpTCB_t *ptr)
         {
             if (tcbPtr == ptr)
             {
-                ret = true;
+                ret = SUCCESS;   //jira: CAE_MCU8-5647
                 break;
             }
             else
@@ -193,13 +208,12 @@ static bool TCB_Check(tcpTCB_t *ptr)
  * @return
  *      false - Send buffer fails.
  */
-static bool TCP_Snd(tcpTCB_t *tcbPtr)
+static error_msg TCP_Snd(tcpTCB_t *tcbPtr)   //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;
     tcpHeader_t txHeader;
     uint16_t payloadLength;
     uint16_t cksm;
-    uint16_t tcpDataLength;
     uint8_t *data;
 
     txHeader.sourcePort = htons(tcbPtr->localPort);
@@ -261,11 +275,11 @@ static bool TCP_Snd(tcpTCB_t *tcbPtr)
     ret = IPv4_Start(tcbPtr->destIP, TCP_TCPIP);
     if (ret == SUCCESS)
     {
-        ETH_WriteBlock((uint8_t *) &txHeader, sizeof(tcpHeader_t));
+        ETH_WriteBlock((char *) &txHeader, sizeof(tcpHeader_t));   //jira: M8TS-608
 
         if (tcpDataLength > 0)
         {
-            ETH_WriteBlock( data, tcpDataLength);
+            ETH_WriteBlock((char *) data, tcpDataLength);   //jira: M8TS-608
         }
 
         cksm = payloadLength + TCP_TCPIP;
@@ -279,11 +293,11 @@ static bool TCP_Snd(tcpTCB_t *tcbPtr)
 
     // The packet wasn't transmitted
     // Use the timeout to retry again later
-    if (ret != SUCCESS)
+    if (ret != SUCCESS && ret != TX_QUEUED)	// jira: CAE_MCU8-5647, CAE_MCU8-6056
     {
         // make sure we keep the remaining timeouts and skip this send  that failed
         // try at least once
-        tcbPtr->timeoutsCount = tcbPtr->timeoutsCount + 1;
+        tcbPtr->timeoutsCount = tcbPtr->timeoutsCount - 1u; // CAE_MCU8-5749, CAE_MCU8-5647
 
         if (tcbPtr->timeout == 0)
         {
@@ -294,6 +308,7 @@ static bool TCP_Snd(tcpTCB_t *tcbPtr)
     {
         //if the packet was sent increment the Seqno.
         tcbPtr->localSeqno = tcbPtr->localSeqno + tcpDataLength;
+        logMsg("tcp_packet sent",LOG_INFO, LOG_DEST_CONSOLE);
     }
 
     return ret;
@@ -311,9 +326,9 @@ static bool TCP_Snd(tcpTCB_t *tcbPtr)
  * @return
  *      false - Copying the payload failed.
  */
-bool TCP_PayloadSave(uint16_t len)
+error_msg TCP_PayloadSave(uint16_t len)   //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;   //jira: CAE_MCU8-5647
     uint16_t buffer_size;
 
     // check if we have a valid buffer
@@ -338,9 +353,10 @@ bool TCP_PayloadSave(uint16_t len)
         //prepare to send the ACK and maybe some data if there are any
         currentTCB->flags = TCP_ACK_FLAG;
         currentTCB->payloadSave = true;
+        
         TCP_Snd(currentTCB);
         currentTCB->payloadSave = false;
-        ret = true;
+        ret = SUCCESS;    //jira: CAE_MCU8-5647
     }
     return ret;
 }
@@ -359,15 +375,15 @@ bool TCP_PayloadSave(uint16_t len)
  * @return
  *      false - parsing the options filed was failed.
  */
-static bool TCP_ParseTCPOptions(void)
+static error_msg TCP_ParseTCPOptions(void)   //jira: CAE_MCU8-5647
 {
     uint8_t  opt;
     uint16_t tcpOptionsSize;
-    bool ret;
+    error_msg ret;     //jira: CAE_MCU8-5647
 
-    ret = false;
+    ret = ERROR;      //jira: CAE_MCU8-5647
     // Check for the option fields in TCP header
-    tcpOptionsSize = (uint16_t)((tcpHeader.dataOffset << 2) - sizeof(tcpHeader_t));
+    tcpOptionsSize = (uint16_t)(tcpHeader.dataOffset << 2u) - (uint16_t)sizeof(tcpHeader_t);   //jira: CAE_MCU8-5647
 
     if (tcpOptionsSize > 0)
     {
@@ -391,7 +407,7 @@ static bool TCP_ParseTCPOptions(void)
                             ETH_Dump(tcpOptionsSize);
                             tcpOptionsSize = 0;
                         }
-                        ret = true;
+                        ret = SUCCESS;    //jira: CAE_MCU8-5647
                         break;
                     case TCP_NOP:
                         // NOP option.
@@ -413,47 +429,51 @@ static bool TCP_ParseTCPOptions(void)
                                     tcpMss = TCP_MAX_SEG_SIZE;
                                 }
                                 // so far so good
-                                ret = true;
+                                ret = SUCCESS;    //jira: CAE_MCU8-5647
                             }else
                             {
                                 // Bad option size length
+                                logMsg("tcp_parseopt: bad option size length",LOG_INFO, LOG_DEST_CONSOLE);
                                 // unexpected error
                                 tcpOptionsSize = 0;
-                                ret = false;
+                                ret = ERROR;     //jira: CAE_MCU8-5647
                             }
                         }else
                         {
                             // unexpected error
                             tcpOptionsSize = 0;
-                            ret = false;
+                            ret = ERROR;     //jira: CAE_MCU8-5647
                         }
                         break;
                     default:
+                        logMsg("tcp_parseopt: other",LOG_INFO, LOG_DEST_CONSOLE);
                         opt = ETH_Read8();
                         tcpOptionsSize--;
 
                         if (opt > 1) // this should be at least 2 to be valid
                         {
                             // adjust for the remaining bytes for the current option
-                            opt = opt - 2;
+                            opt = opt - 2u;    //jira: CAE_MCU8-5647
                             if (opt <= tcpOptionsSize)
                             {
                                 // All other options have a length field, so that we easily can skip them.
                                 ETH_Dump(opt);
                                 tcpOptionsSize = tcpOptionsSize - opt;
-                                ret = true;
+                                ret = SUCCESS;    //jira: CAE_MCU8-5647
                             }else
                             {
+                                logMsg("tcp_parseopt: bad option length",LOG_INFO, LOG_DEST_CONSOLE);
                                 // the options are malformed and we don't process them further.
                                 tcpOptionsSize = 0;
-                                ret = false;
+                                ret = ERROR;     //jira: CAE_MCU8-5647
                             }
                         }else
                         {
+                            logMsg("tcp_parseopt: bad length",LOG_INFO, LOG_DEST_CONSOLE);
                             // If the length field is zero, the options are malformed
                             // and we don't process them further.
                             tcpOptionsSize = 0;
-                            ret = false;
+                            ret = ERROR;     //jira: CAE_MCU8-5647
                         }
                         break;
                 }
@@ -461,11 +481,11 @@ static bool TCP_ParseTCPOptions(void)
         }else // jump over the Options from TCP header
         {
             ETH_Dump(tcpOptionsSize);
-            ret = true;
+            ret = SUCCESS;    //jira: CAE_MCU8-5647
         }
     }else
     {
-        ret = true;
+        ret = SUCCESS;    //jira: CAE_MCU8-5647
     }
 
     return ret;
@@ -530,7 +550,7 @@ void TCP_Recv(uint32_t remoteAddress, uint16_t length)
                 rcvPayloadLen = length - (uint16_t)(tcpHeader.dataOffset << 2);
 
                 // check/skip the TCP header options
-                if (TCP_ParseTCPOptions() == true)
+                if (TCP_ParseTCPOptions() == SUCCESS)
                 {
                     // we got a packet
                     // sort out the events
@@ -538,35 +558,43 @@ void TCP_Recv(uint32_t remoteAddress, uint16_t length)
                     {
                         if(tcpHeader.ack)
                         {
+                            logMsg("found syn&ack",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_SYNACK;
                         } else
                         {
+                            logMsg("found syn",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_SYN;
                         }
                     } else if(tcpHeader.fin)
                     {
                         if(tcpHeader.ack)
                         {
+                            logMsg("found fin&ack",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_FINACK;
                         } else
                         {
+                            logMsg("found fin",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_FIN;
                         }
                     } else if(tcpHeader.rst)
                     {
                         if(tcpHeader.ack)
                         {
+                            logMsg("found rst&ack",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_RSTACK;
                         } else
                         {
+                            logMsg("found rst",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->connectionEvent = RCV_RST;
                         }
                     } else if(tcpHeader.ack)
                     {
+                        logMsg("found ack",LOG_INFO, LOG_DEST_CONSOLE);
                         currentTCB->connectionEvent = RCV_ACK;
                     }
                     else
                     {
+                        logMsg("confused",LOG_INFO, LOG_DEST_CONSOLE);
                     }
                     // convert it here to save some cycles later
                     tcpHeader.ackNumber = ntohl(tcpHeader.ackNumber);
@@ -575,6 +603,7 @@ void TCP_Recv(uint32_t remoteAddress, uint16_t length)
                     TCP_FiniteStateMachine();
                 }else
                 {
+                    logMsg("pkt dropped: bad options",LOG_INFO, LOG_DEST_CONSOLE);
                 }
             } // we will not send a reset message for PORT not open
         }
@@ -593,10 +622,10 @@ void TCP_Recv(uint32_t remoteAddress, uint16_t length)
  * @return
  *      None
  */
-static bool TCP_FiniteStateMachine(void)
+static error_msg TCP_FiniteStateMachine(void)  //jira: CAE_MCU8-5647
 {
     uint16_t notAckBytes;
-    bool ret = false;
+    error_msg ret = ERROR;  //jira: CAE_MCU8-5647
 
     tcp_fsm_states_t nextState = currentTCB->fsmState; // default don't change states
     tcpEvent_t event = currentTCB->connectionEvent;
@@ -611,6 +640,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case RCV_SYN:
+                    logMsg("LISTEN: rx_syn",LOG_INFO, LOG_DEST_CONSOLE);
                     // Start the connection on the TCB
 
                     currentTCB->destIP = receivedRemoteAddress;
@@ -636,7 +666,8 @@ static bool TCP_FiniteStateMachine(void)
                     nextState = SYN_RECEIVED;
                     break;
                 case CLOSE:
-                    nextState = CLOSE;
+                    logMsg("LISTEN: close",LOG_INFO, LOG_DEST_CONSOLE);
+                    nextState = CLOSED;
                     TCB_Reset(currentTCB);
                     break;
                 default:
@@ -648,6 +679,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case RCV_SYN:
+                    logMsg("SYN_SENT: rx_syn",LOG_INFO, LOG_DEST_CONSOLE);
                     // Simultaneous open
                     currentTCB->remoteSeqno =  tcpHeader.sequenceNumber;
                     currentTCB->remoteAck = tcpHeader.sequenceNumber + 1; //ask for next packet
@@ -668,6 +700,7 @@ static bool TCP_FiniteStateMachine(void)
                     nextState = SYN_RECEIVED;
                     break;
                 case RCV_SYNACK:
+                    logMsg("SYN_SENT: rx_synack",LOG_INFO, LOG_DEST_CONSOLE);
 
                     currentTCB->timeout = 0;
 
@@ -685,7 +718,7 @@ static bool TCP_FiniteStateMachine(void)
                         currentTCB->remoteWnd = ntohs(tcpHeader.windowSize);
                         currentTCB->mss = tcpMss;
 
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
                             nextState = ESTABLISHED;
                             currentTCB->socketState = SOCKET_CONNECTED;
@@ -696,14 +729,15 @@ static bool TCP_FiniteStateMachine(void)
                         //send reset
                         currentTCB->localSeqno = tcpHeader.ackNumber;
                         currentTCB->flags =  TCP_RST_FLAG | TCP_ACK_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))  //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
                     break;
                 case RCV_ACK:
+                    logMsg("SYN_SENT: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
 
                     currentTCB->timeout = 0;
 
@@ -728,28 +762,30 @@ static bool TCP_FiniteStateMachine(void)
                         //send reset
                         currentTCB->localSeqno = tcpHeader.ackNumber;
                         currentTCB->flags =  TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))    //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
                     break;
                 case CLOSE:
+                    logMsg("SYN_SENT: close",LOG_INFO, LOG_DEST_CONSOLE);
                     //go to CLOSED state
                     nextState = CLOSED;
                     TCB_Reset(currentTCB);
                     break;
                 case TIMEOUT:
+                    logMsg("SYN_SENT: timeout",LOG_INFO, LOG_DEST_CONSOLE);
                     // looks like the the packet was lost
                     // check inside the packet to see where to jump next
                     if (currentTCB->timeoutsCount)
                     {
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
                             if (currentTCB->flags & TCP_RST_FLAG)
                             {
-                                nextState = CLOSE;
+                                nextState = CLOSED;
                                 TCB_Reset(currentTCB);
                             }else
                             if(currentTCB->flags & TCP_ACK_FLAG)
@@ -762,9 +798,9 @@ static bool TCP_FiniteStateMachine(void)
                     {
                         // just reset the connection if there is no reply
                         currentTCB->flags = TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))  //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     } 
@@ -784,6 +820,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case RCV_SYNACK:
+                    logMsg("SYN_RECEIVED: rx_synack",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->localPort == tcpHeader.destPort)
                     {
                         // stop the current timeout
@@ -799,6 +836,7 @@ static bool TCP_FiniteStateMachine(void)
                     }
                     break;
                 case RCV_ACK:
+                    logMsg("SYN_RECEIVED: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
 
                     // check if the packet is for the curent TCB
                     // we need to check the remote IP adress and remote port
@@ -822,6 +860,7 @@ static bool TCP_FiniteStateMachine(void)
                     }
                     break;
                 case CLOSE:
+                    logMsg("SYN_RECEIVED: close",LOG_INFO, LOG_DEST_CONSOLE);
                     // stop the current timeout
                     currentTCB->timeout = 0;
                     // Need to send FIN and go to the FIN_WAIT_1
@@ -836,11 +875,13 @@ static bool TCP_FiniteStateMachine(void)
                 case RCV_RSTACK:
                 case RCV_RST:
                     // Reset the connection
+                    logMsg("SYN_RECEIVED:  rx_rst",LOG_INFO, LOG_DEST_CONSOLE);
                     //check if the local port match; else drop the pachet
                     if (currentTCB->localPort == tcpHeader.destPort)
                     {
                         if (currentTCB->remoteAck ==  tcpHeader.sequenceNumber)
                         {
+                            logMsg("rst seq OK",LOG_INFO, LOG_DEST_CONSOLE);
                             currentTCB->destIP = 0;
                             currentTCB->destPort = 0;
                             currentTCB->localSeqno = 0;
@@ -856,6 +897,7 @@ static bool TCP_FiniteStateMachine(void)
                     }
                     break;
                 case TIMEOUT:
+                    logMsg("SYN_RECEIVED:  timeout",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->timeoutsCount)
                     {
                         TCP_Snd(currentTCB);
@@ -864,7 +906,7 @@ static bool TCP_FiniteStateMachine(void)
                     {
                         //reseting the connection if there is no reply
                         currentTCB->flags =   TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))  //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
                             currentTCB->destIP = 0;
                             currentTCB->destPort = 0;
@@ -888,6 +930,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case RCV_ACK:
+                    logMsg("ESTABLISHED: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->destIP == receivedRemoteAddress)
                     {
                         // is sequence number OK?
@@ -911,7 +954,10 @@ static bool TCP_FiniteStateMachine(void)
                                     
                                     currentTCB->localLastAck = tcpHeader.ackNumber - 1;
                                     currentTCB->localSeqno = tcpHeader.ackNumber;
-                                    
+                                    if(bytesToSendForRetransmit == 0)
+                                    {
+                                        localSeqnoForRetransmit = currentTCB->localSeqno;
+                                    }
                                     // Check if all TX buffer/data was acknowledged
                                     if(currentTCB->bytesToSend == 0) 
                                     {
@@ -923,9 +969,24 @@ static bool TCP_FiniteStateMachine(void)
                                         }
                                     }                                    
                                     else
-                                    {                                        
-                                        currentTCB->bytesSent = currentTCB->bytesToSend;
+                                    {       
+                                        if(bytesToSendForRetransmit)	//jira: CAE_MCU8-6056
+                                        {
+                                            currentTCB->txBufferPtr = txBufferPtrForRetransmit;
+                                            currentTCB->bytesSent = bytesToSendForRetransmit;
+                                            currentTCB->localSeqno = localSeqnoForRetransmit;
+                                        }
+                                        else
+                                        {
+                                            currentTCB->bytesSent = currentTCB->bytesToSend;
+                                        }
+                                        currentTCB->timeoutReloadValue = TCP_START_TIMEOUT_VAL;
+                                        currentTCB->timeoutsCount = TCP_MAX_RETRIES;
                                         TCP_Snd(currentTCB);
+                                        if( (bytesToSendForRetransmit>0) && (lastAckNumber != tcpHeader.ackNumber) )	//jira: CAE_MCU8-6056
+                                        {
+                                            bytesToSendForRetransmit =0;
+                                        }
                                     }
 
                                     
@@ -947,28 +1008,52 @@ static bool TCP_FiniteStateMachine(void)
                     }
                     break;
                 case CLOSE:
-                    currentTCB->flags = TCP_FIN_FLAG;
+                    logMsg("ESTABLISHED: close",LOG_INFO, LOG_DEST_CONSOLE);
+                    currentTCB->flags = TCP_FIN_FLAG | TCP_ACK_FLAG ;	//jira: M8TS-514, M8TS-538, M8TS-463
                     nextState = FIN_WAIT_1;
-                    TCP_Snd(currentTCB);
-                    break;
-                case RCV_FIN:
-                    break;
-                case RCV_FINACK:
-                    currentTCB->bytesSent = 0;                   
-                    // ACK the current packet
-                    // TO DO  check if it's a valid packet
-                    currentTCB->localSeqno = tcpHeader.ackNumber;
-                    currentTCB->remoteAck = currentTCB->remoteAck + 1;
-
-                    currentTCB->socketState = SOCKET_CLOSING;
+                    currentTCB->timeout = 0;
                     currentTCB->timeout = TCP_START_TIMEOUT_VAL;
                     currentTCB->timeoutReloadValue = TCP_START_TIMEOUT_VAL;
                     currentTCB->timeoutsCount = TCP_MAX_RETRIES;
-                    // JUMP over CLOSE_WAIT state and send one packet with FIN + ACK
-                    currentTCB->flags =  TCP_FIN_FLAG | TCP_ACK_FLAG;
-                    
-                    nextState = LAST_ACK;
                     TCP_Snd(currentTCB);
+                    break;
+                case RCV_FIN:
+                    logMsg("ESTABLISHED: rx_fin",LOG_INFO, LOG_DEST_CONSOLE);
+                    break;
+                case RCV_FINACK:
+                    if (currentTCB->destIP == receivedRemoteAddress)        //jira: CAE_MCU8-5830
+                    {
+                        // is sequence number OK?
+                        // remote ACK should be equal to header sequence number
+                        // we don't accept out of order packet (not enough memory)
+                        if (currentTCB->remoteAck == tcpHeader.sequenceNumber)    //jira: CAE_MCU8-5830
+                        {
+                            currentTCB->bytesSent = 0;                   
+                            // ACK the current packet
+                            // TO DO  check if it's a valid packet
+                            currentTCB->localSeqno = tcpHeader.ackNumber;
+                            currentTCB->remoteAck = currentTCB->remoteAck + 1;
+
+                            // check if the packet has payload added for MCCV3xx-6762
+                            if(rcvPayloadLen > 0)	 //jira: CAE_MCU8-6056
+                            {
+                                currentTCB->remoteSeqno =  tcpHeader.sequenceNumber;
+
+                                // copy the payload to the local buffer
+                                TCP_PayloadSave(rcvPayloadLen);
+                            }
+
+                            currentTCB->socketState = SOCKET_CLOSING;
+                            currentTCB->timeout = TCP_START_TIMEOUT_VAL;
+                            currentTCB->timeoutReloadValue = TCP_START_TIMEOUT_VAL;
+                            currentTCB->timeoutsCount = TCP_MAX_RETRIES;
+                            // JUMP over CLOSE_WAIT state and send one packet with FIN + ACK
+                            currentTCB->flags =  TCP_FIN_FLAG | TCP_ACK_FLAG;
+
+                            nextState = LAST_ACK;
+                            TCP_Snd(currentTCB);
+                        }
+                    }
                     break;
                 case RCV_RST:
                 case RCV_RSTACK:                     
@@ -978,16 +1063,17 @@ static bool TCP_FiniteStateMachine(void)
                     TCB_Reset(currentTCB);
                     break;
                 case TIMEOUT:
+                    logMsg("ESTABLISHED:  timeout",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->timeoutsCount)
                     {
-                        TCP_Snd(currentTCB);
+                        TCP_TimoutRetransmit();	//jira: CAE_MCU8-6056
                     }else
                     {
                         // reset the connection if there is no reply
                         currentTCB->flags =   TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))    //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
@@ -1001,25 +1087,40 @@ static bool TCP_FiniteStateMachine(void)
             {
                 case RCV_FIN:
                     currentTCB->flags =  TCP_ACK_FLAG;
-                    if(TCP_Snd(currentTCB))
+                    if (currentTCB->remoteAck == tcpHeader.sequenceNumber)	//jira: M8TS-514, M8TS-538, M8TS-463	
                     {
-                        nextState = CLOSING;
-                    }
+                        currentTCB->bytesSent = 0;                   
+                        currentTCB->localSeqno = currentTCB->localSeqno + 1;
+                        currentTCB->remoteAck = currentTCB->remoteAck + 1;
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647
+                       {
+                           nextState = CLOSING;
+                       }
+                    }     
                     break;
                 case RCV_ACK:
+                    logMsg("FIN_WAIT_1: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
                     // stop the current timeout
                     currentTCB->timeout = TCP_START_TIMEOUT_VAL;
                     currentTCB->timeoutsCount = 1;
                     nextState = FIN_WAIT_2;
                     break;
                 case RCV_FINACK:
+                    logMsg("FIN_WAIT_1: rx_finack",LOG_INFO, LOG_DEST_CONSOLE);
                     currentTCB->flags =  TCP_ACK_FLAG;
-                    if(TCP_Snd(currentTCB))
+                    if (currentTCB->remoteAck == tcpHeader.sequenceNumber)	//jira: M8TS-514, M8TS-538, M8TS-463
                     {
-                        nextState = TIME_WAIT;
+                        currentTCB->bytesSent = 0;                   
+                        currentTCB->localSeqno = currentTCB->localSeqno + 1;
+                        currentTCB->remoteAck = currentTCB->remoteAck + 1;
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647
+                        {
+                            nextState = TIME_WAIT;
+                        }
                     }
                     break;
                 case TIMEOUT:
+                    logMsg("FIN_WAIT_1:  timeout",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->timeoutsCount)
                     {
                         TCP_Snd(currentTCB);
@@ -1027,9 +1128,9 @@ static bool TCP_FiniteStateMachine(void)
                     {
                         // just reset the connection if there is no reply
                         currentTCB->flags =   TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))  //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
@@ -1041,13 +1142,24 @@ static bool TCP_FiniteStateMachine(void)
         case FIN_WAIT_2:
             switch (event)
             {
+                case RCV_FINACK:					 		//jira: M8TS-514, M8TS-538, M8TS-463                   
                 case RCV_FIN:
-                    if(TCP_Snd(currentTCB))
+                    logMsg("FIN_WAIT_2: rx_fin/rx_finack",LOG_INFO, LOG_DEST_CONSOLE);
+                    currentTCB->flags =  TCP_ACK_FLAG;					//jira: M8TS-514, M8TS-538, M8TS-463
+                    if (currentTCB->remoteAck == tcpHeader.sequenceNumber)
                     {
-                        nextState = TIME_WAIT;
+                        currentTCB->bytesSent = 0;                   
+                        currentTCB->localSeqno = currentTCB->localSeqno + 1;
+                        currentTCB->remoteAck = currentTCB->remoteAck + 1;     
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647
+                        {
+                            nextState = TIME_WAIT;
+                        }   
                     }
+                                 
                     break;
                 case TIMEOUT:
+                    logMsg("FIN_WAIT_2:  timeout",LOG_INFO, LOG_DEST_CONSOLE);
                     if (currentTCB->timeoutsCount)
                     {
                         TCP_Snd(currentTCB);
@@ -1055,9 +1167,9 @@ static bool TCP_FiniteStateMachine(void)
                     {
                         // just reset the connection if there is no reply
                         currentTCB->flags =   TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))   //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
@@ -1073,6 +1185,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case RCV_ACK:
+                    logMsg("CLOSING: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
                     nextState = TIME_WAIT;
                     break;
                 default:
@@ -1088,6 +1201,7 @@ static bool TCP_FiniteStateMachine(void)
                     if ((currentTCB->destIP == receivedRemoteAddress) &&
                         (currentTCB->destPort == tcpHeader.sourcePort))
                     {
+                        logMsg("LAST_ACK: rx_ack",LOG_INFO, LOG_DEST_CONSOLE);
                         nextState = CLOSED;
                         TCB_Reset(currentTCB);
                     }
@@ -1100,9 +1214,9 @@ static bool TCP_FiniteStateMachine(void)
                     {
                         // just reset the connection if there is no reply
                         currentTCB->flags =   TCP_RST_FLAG;
-                        if(TCP_Snd(currentTCB))
+                        if(TCP_Snd(currentTCB) == (TX_QUEUED || SUCCESS))    //jira: CAE_MCU8-5647, CAE_MCU8-6056
                         {
-                            nextState = CLOSE;
+                            nextState = CLOSED;
                             TCB_Reset(currentTCB);
                         }
                     }
@@ -1111,6 +1225,7 @@ static bool TCP_FiniteStateMachine(void)
             }
             break;
         case TIME_WAIT:
+            logMsg("Time Wait",LOG_INFO, LOG_DEST_CONSOLE);
             nextState = CLOSED;
             TCB_Reset(currentTCB);
             break;
@@ -1118,6 +1233,7 @@ static bool TCP_FiniteStateMachine(void)
             switch (event)
             {
                 case ACTIVE_OPEN:
+                    logMsg("CLOSED: active_open",LOG_INFO, LOG_DEST_CONSOLE);
                     // create and send a SYN packet
                     currentTCB->timeout = TCP_START_TIMEOUT_VAL;
                     currentTCB->timeoutReloadValue = TCP_START_TIMEOUT_VAL;
@@ -1125,13 +1241,14 @@ static bool TCP_FiniteStateMachine(void)
                     currentTCB->flags = TCP_SYN_FLAG;
                     TCP_Snd(currentTCB);
                     nextState = SYN_SENT;
-                    ret = true;
+                    ret = SUCCESS;    //jira: CAE_MCU8-5647
                     break;
                 case PASIVE_OPEN:
+                    logMsg("CLOSED: passive_open",LOG_INFO, LOG_DEST_CONSOLE);
                     currentTCB->destIP = 0;
                     currentTCB->destPort = 0;
                     nextState = LISTEN;
-                    ret = true;
+                    ret = SUCCESS;    //jira: CAE_MCU8-5647
                     break;
                 default:
                     break;
@@ -1154,12 +1271,12 @@ void TCP_Init(void)
     nextSequenceNumber = 0;
 }
 
-tcbError_t TCP_SocketInit(tcpTCB_t *tcbPtr)
+error_msg TCP_SocketInit(tcpTCB_t *tcbPtr)   //jira: CAE_MCU8-5647
 {
-    tcbError_t ret = TCB_ERROR;
+    error_msg ret = ERROR;     //jira: CAE_MCU8-5647
     
     // verify that this socket is not in the list
-    if(TCB_Check(tcbPtr) == false)
+    if(TCB_Check(tcbPtr) == ERROR)    //jira: CAE_MCU8-5647
     {
         TCB_Reset(tcbPtr);
 
@@ -1176,22 +1293,22 @@ tcbError_t TCP_SocketInit(tcpTCB_t *tcbPtr)
         tcbPtr->payloadSave = false;
         tcbPtr->txBufState = NO_BUFF;
         tcbPtr->socketState = SOCKET_CLOSED;
-        
+
         TCB_Insert(tcbPtr);
-        ret = TCB_NO_ERROR;
+        ret = SUCCESS;   //jira: CAE_MCU8-5647
     }
     return ret;
 }
 
-tcbError_t TCP_SocketRemove(tcpTCB_t *tcbPtr)
+error_msg TCP_SocketRemove(tcpTCB_t *tcbPtr)    //jira: CAE_MCU8-5647
 {
-    tcbError_t ret = TCB_ERROR;
+    error_msg ret = ERROR;   //jira: CAE_MCU8-5647
     
     // verify that this socket is in the Closed State
     if(TCP_SocketPoll(tcbPtr) == SOCKET_CLOSING)
     {
         TCB_Remove(tcbPtr);
-        ret = TCB_NO_ERROR;
+        ret = SUCCESS;    //jira: CAE_MCU8-5647
     }
     return ret;
 }
@@ -1202,7 +1319,7 @@ socketState_t TCP_SocketPoll(tcpTCB_t *socket_ptr)
    
     tmpSocketState = NOT_A_SOCKET;
     
-    if(TCB_Check(socket_ptr))
+    if (TCB_Check(socket_ptr) == SUCCESS)    //jira: CAE_MCU8-5647
     {
         tmpSocketState = socket_ptr->socketState;
     }
@@ -1211,24 +1328,28 @@ socketState_t TCP_SocketPoll(tcpTCB_t *socket_ptr)
 }
 
 
-bool TCP_Bind(tcpTCB_t *tcbPtr, uint16_t port)
+error_msg TCP_Bind(tcpTCB_t *tcbPtr, uint16_t port)    //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;     //jira: CAE_MCU8-5647
 
-    if (TCB_Check(tcbPtr))
+    logMsg("tcp_bind",LOG_INFO, LOG_DEST_CONSOLE);
+
+    if (TCB_Check(tcbPtr) == SUCCESS)    //jira: CAE_MCU8-5647
     {
         tcbPtr->localPort = port;
-        ret = true;
+        ret = SUCCESS;   //jira: CAE_MCU8-5647
     }
     return ret;
 }
 
 
-bool TCP_Listen(tcpTCB_t *tcbPtr)
+error_msg TCP_Listen(tcpTCB_t *tcbPtr)    //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;    //jira: CAE_MCU8-5647
 
-    if (TCB_Check(tcbPtr))
+    logMsg("tcp_listen",LOG_INFO, LOG_DEST_CONSOLE);
+
+    if (TCB_Check(tcbPtr) == SUCCESS)    //jira: CAE_MCU8-5647
     {
         tcbPtr->connectionEvent = PASIVE_OPEN;
         tcbPtr->socketState = SOCKET_IN_PROGRESS;
@@ -1244,9 +1365,9 @@ bool TCP_Listen(tcpTCB_t *tcbPtr)
 }
 
 
-bool TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in_t *srvaddr)
+error_msg TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in4_t *srvaddr)   //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;     //jira: CAE_MCU8-5647
 
     if (TCP_SocketPoll(tcbPtr) == SOCKET_CLOSED)
     {
@@ -1271,15 +1392,26 @@ bool TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in_t *srvaddr)
 }
 
 
-bool TCP_Close(tcpTCB_t *tcbPtr)
+error_msg TCP_Close(tcpTCB_t *tcbPtr)   //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;    //jira: CAE_MCU8-5647
 
-    if (TCB_Check(tcbPtr))
+    logMsg("tcp_close",LOG_INFO, LOG_DEST_CONSOLE);
+
+    if (TCB_Check(tcbPtr) == SUCCESS)    //jira: CAE_MCU8-5647
     {
         tcbPtr->connectionEvent = CLOSE;
         
-        tcbPtr->socketState = SOCKET_CLOSING;
+
+        tcbPtr->txBufState = NO_BUFF;
+        tcbPtr->rxBufState = NO_BUFF;
+        tcbPtr->txBufferPtr = NULL;
+        tcbPtr->txBufferStart = NULL;
+        tcbPtr->rxBufferPtr = NULL;
+        tcbPtr->rxBufferStart = NULL;
+        tcbPtr->bytesToSend = 0;
+        tcbPtr->bytesSent = 0;
+        tcbPtr->payloadSave = false;
 
         // likely to change this to a needs TX time queue
         currentTCB = tcbPtr;
@@ -1289,9 +1421,9 @@ bool TCP_Close(tcpTCB_t *tcbPtr)
 }
 
 
-bool TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen)
+error_msg TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen)    //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;    //jira: CAE_MCU8-5647
 
     if (TCP_SocketPoll(tcbPtr) == SOCKET_CONNECTED)
     {
@@ -1304,14 +1436,15 @@ bool TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen)
                 tcbPtr->bytesToSend = dataLen;
                 tcbPtr->txBufState = TX_BUFF_IN_USE;
                 tcbPtr->bytesSent = dataLen;
-                
+
+                tcbPtr->timeout = TCP_START_TIMEOUT_VAL; 
                 tcbPtr->timeoutReloadValue = TCP_START_TIMEOUT_VAL;
                 tcbPtr->timeoutsCount = TCP_MAX_RETRIES;
 
                 tcbPtr->flags = TCP_ACK_FLAG;
 
                 TCP_Snd(tcbPtr);
-                ret = true;
+                ret = SUCCESS;    //jira: CAE_MCU8-5647
             }
         }
     }
@@ -1319,25 +1452,25 @@ bool TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen)
 }
 
 
-bool TCP_SendDone(tcpTCB_t *tcbPtr)
+error_msg TCP_SendDone(tcpTCB_t *tcbPtr)    //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;      //jira: CAE_MCU8-5647
 
-    if(TCB_Check(tcbPtr))
+    if(TCB_Check(tcbPtr) == SUCCESS)     //jira: CAE_MCU8-5647
     {
         if (tcbPtr->txBufState == NO_BUFF)
         {
-            ret = true;
+            ret = SUCCESS;   //jira: CAE_MCU8-5647
         }
     }
     return ret;
 }
 
-bool TCP_InsertRxBuffer(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t data_len)
+error_msg TCP_InsertRxBuffer(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t data_len)     //jira: CAE_MCU8-5647
 {
-    bool ret = false;
+    error_msg ret = ERROR;     //jira: CAE_MCU8-5647
 
-    if (TCB_Check(tcbPtr))
+    if (TCB_Check(tcbPtr) == SUCCESS)     //jira: CAE_MCU8-5647
     {
         if (tcbPtr->rxBufState == NO_BUFF)
         {
@@ -1347,7 +1480,7 @@ bool TCP_InsertRxBuffer(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t data_len)
                 tcbPtr->rxBufferPtr = tcbPtr->rxBufferStart;
                 tcbPtr->localWnd = data_len;  // update the available receive windows
                 tcbPtr->rxBufState = RX_BUFF_IN_USE;
-                ret = true;
+                ret = SUCCESS;    //jira: CAE_MCU8-5647
             }
         }
     }
@@ -1359,7 +1492,7 @@ int16_t TCP_GetReceivedData(tcpTCB_t *tcbPtr)
 {
     int16_t ret = 0;
 
-    if (TCB_Check(tcbPtr))
+    if (TCB_Check(tcbPtr) == SUCCESS)     //jira: CAE_MCU8-5647
     {
         if (tcbPtr->rxBufState == RX_BUFF_IN_USE)
         {
@@ -1379,7 +1512,7 @@ int16_t TCP_GetRxLength(tcpTCB_t *tcbPtr)
 {
     int16_t ret = 0;
 
-    if (TCB_Check(tcbPtr))
+    if (TCB_Check(tcbPtr) == SUCCESS)     //jira: CAE_MCU8-5647
     {
         if (tcbPtr->rxBufState == RX_BUFF_IN_USE)
         {
@@ -1412,26 +1545,25 @@ void TCP_Update(void)
     {
         if (tcbPtr->timeout > 0)
         {
+            logMsg("tcp timeout",LOG_INFO, LOG_DEST_CONSOLE);
             tcbPtr->timeout = tcbPtr->timeout - 1;
 
             if (tcbPtr->timeout == 0)
             {
-                // >= instead of >
-                //So that we go into TCP_FiniteStateMachine when the timeout counts are zero
-                //So that we send the RST flag when we run out of timeouts
-                if (tcbPtr->timeoutsCount >= 0)
+                // MAKE sure we don't overwrite anything else
+                if (tcbPtr->connectionEvent == NOP)
                 {
-                    // MAKE sure we don't overwrite anything else
-                    if (tcbPtr->connectionEvent == NOP)
-                    {
-                        tcbPtr->timeout = tcbPtr->timeoutReloadValue;
-                        //if not zero
-                        if (tcbPtr->timeoutsCount != 0)
-                            tcbPtr->timeoutsCount = tcbPtr->timeoutsCount - 1;
-                        tcbPtr->connectionEvent = TIMEOUT;
-                        currentTCB = tcbPtr;
-                        TCP_FiniteStateMachine();
+                    int retries = TCP_MAX_RETRIES - tcbPtr->timeoutsCount; // Jira: CAE_MCU8-5772
+                    if(retries < 0){
+                        retries = 0;
                     }
+                    tcbPtr->timeout = tcbPtr->timeoutReloadValue << retries; 
+                    //if not zero
+                    if (tcbPtr->timeoutsCount != 0)
+                        tcbPtr->timeoutsCount = tcbPtr->timeoutsCount - 1u;  //jira: CAE_MCU8-5647
+                    tcbPtr->connectionEvent = TIMEOUT;
+                    currentTCB = tcbPtr;
+                    TCP_FiniteStateMachine();
                 }
             }
         }
@@ -1440,3 +1572,12 @@ void TCP_Update(void)
     }
 }
 
+static error_msg TCP_TimoutRetransmit(void)	//jira: CAE_MCU8-6056
+{
+    currentTCB->txBufferPtr -= tcpDataLength;
+    txBufferPtrForRetransmit = currentTCB->txBufferPtr;
+    bytesToSendForRetransmit = tcpDataLength;
+    currentTCB->localSeqno = localSeqnoForRetransmit;
+    lastAckNumber = tcpHeader.ackNumber;
+    return TCP_Snd(currentTCB);
+}

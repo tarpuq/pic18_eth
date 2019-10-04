@@ -56,6 +56,7 @@ typedef union
 
 extern const mac48Address_t broadcastMAC;
 extern const mac48Address_t macAddress;
+extern mac48Address_t hostMacAddress;
 
 const mac48Address_t *MAC_getAddress(void);
 

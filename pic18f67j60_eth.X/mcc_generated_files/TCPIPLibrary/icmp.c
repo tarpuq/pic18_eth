@@ -118,7 +118,7 @@ error_msg ICMP_EchoReply(ipv4Header_t *ipv4Hdr)
         
         ETH_Write16(identifier);
         ETH_Write16(sequence);
-        
+        ETH_SaveRDPT(); //Get the Read Pointer
         // copy the next N bytes from the RX buffer into the TX buffer
         ret = ETH_Copy(ipv4PayloadLength - sizeof(icmpHeader_t) - 4);
         if(ret==SUCCESS) // copy can timeout in heavy network situations like flood ping
@@ -150,7 +150,8 @@ error_msg ICMP_PortUnreachable(uint32_t srcIPAddress,uint32_t destIPAddress, uin
         ETH_Write16(DEST_PORT_UNREACHABLE);
         ETH_Write16(0); // checksum
         ETH_Write32(0); //unused and next-hop
-        ETH_SetReadPtr(IPV4_GetStartPosition());
+        ETH_SetReadPtr(Network_GetStartPosition()); 
+        ETH_SaveRDPT(); // Get the Read Pointer
         ETH_Copy(sizeof(ipv4Header_t) + length);
         cksm = ETH_TxComputeChecksum(sizeof(ethernetFrame_t) + sizeof(ipv4Header_t),  sizeof(icmpHeader_t)+ sizeof(ipv4Header_t) + length, 0);
         ETH_Insert((char *)&cksm,sizeof(cksm),sizeof(ethernetFrame_t) + sizeof(ipv4Header_t) + offsetof(icmpHeader_t,checksum));

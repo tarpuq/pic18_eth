@@ -114,13 +114,6 @@ uint16_t IPV4_PseudoHeaderChecksum(uint16_t payloadLen);
  */
 error_msg IPV4_Send(uint16_t payloadLength);
 
-/**This function gets the Read pointer of Start of the IPv4 Packet 
- * 
- * @return 
- *      IPv4 Read pointer address
- */
-uint16_t IPV4_GetStartPosition(void);
-
 /**This function returns the length of the IPv4 Datagram
  * 
  * @return 

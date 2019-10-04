@@ -51,7 +51,7 @@
 extern ip_db_info_t ip_database_info;
 
 #define ipdb_getAddress()		(ip_database_info.ipv4_myAddress)
-#define ipdb_getDNS()  			(ip_database_info.ipv4_dns[0]) // TODO decide how to get a primary or secondary DNS
+#define ipdb_getDNS()  			(ip_database_info.ipv4_dns[0]) // decide how to get a primary or secondary DNS
 #define ipdb_getSubNetMASK()	(ip_database_info.ipv4_subnetMask)
 #define ipdb_getRouter()		(ip_database_info.ipv4_router)
 #define ipdb_getNTP()			(ip_database_info.ipv4_ntpAddress[0])

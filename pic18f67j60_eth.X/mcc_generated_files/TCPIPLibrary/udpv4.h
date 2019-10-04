@@ -58,7 +58,7 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 
 extern uint16_t destPort;
 extern udpHeader_t udpHeader;
-extern ipv4Header_t ipv4Header; // TODO re evaluate this dependancy sometime
+extern ipv4Header_t ipv4Header; // re evaluate this dependancy sometime
 
 #define   UDP_ReadBlock(data,length)  ETH_ReadBlock(data,length)
 #define   UDP_Read8()                 ETH_Read8()
@@ -72,14 +72,15 @@ extern ipv4Header_t ipv4Header; // TODO re evaluate this dependancy sometime
 #define   UDP_WriteBlock(data,length) ETH_WriteBlock(data,length)
 #define   UDP_WriteString(data)       ETH_WriteString(data)
 #define   UDP_GetDestPort()           (destPort)
+#define   UDP_GetSrcPort()            (udpHeader.dstPort)
 #define   UDP_GetDestIP()             (ipv4Header.srcIpAddress)
 #define   UDP_GetSrcIP()              (ipv4Header.dstIpAddress)
-#define   UDP_DataLength()            (ntohs(udpHeader.length) - 8)
-#define   UDP_DumpPacketInCreation()  ETH_TxReset()
-#define   UDP_FlushRxdPacket()        ETH_Flush();
+#define   UDP_DataLength()            ((udpHeader.length) - 8)
+#define   UDP_FlushTXPackets()        ETH_TxReset()
+#define   UDP_FlushRxdPacket()        ETH_Flush()
 
 error_msg UDP_Start(uint32_t destIP, uint16_t srcPort, uint16_t dstPort);
-error_msg UDP_Send();
+error_msg UDP_Send(void);
 error_msg UDP_Receive(uint16_t udpcksm);
 void udp_test(int len);
 

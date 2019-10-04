@@ -3,21 +3,12 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/main.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/mcc.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/pin_manager.c</file>
             <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/ETHxxJ6x_driver.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/network.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/arpv4.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/tcpv4.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/tcpip_types.h</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/arpv4.h</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/rtcc.c</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/lfsr.h</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/tcpip_config.h</file>
             <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/udpv4.h</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/ipv4.h</file>
-            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/udpv4.c</file>
+            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/arpv4.c</file>
+            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/icmp.c</file>
+            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/ip_database.c</file>
+            <file>file:/D:/ownCloud/Workspace/MPLABProjects/pic18_eth/pic18f67j60_eth.X/mcc_generated_files/TCPIPLibrary/ipv4.c</file>
         </group>
     </open-files>
 </project-private>

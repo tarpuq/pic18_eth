@@ -8,7 +8,7 @@
     network.h
 
   Summary:
-    Header file for network helper.
+    Header file for network.c.
 
   Description:
     This header file provides the API for the network helper.
@@ -49,17 +49,76 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
                           (((uint32_t)a&(uint32_t)0x0000ff00) <<  8) | \
                           (((uint32_t)a&(uint32_t)0x000000ff) << 24) )
 
-// host to network & network to host macros
-#define htons(a) byteSwap16(a)
-#define ntohs(a) byteSwap16(a)
-#define htonl(a) byteReverse32(a)
-#define ntohl(a) byteReverse32(a)
+#define byteReverse24(a) (((((uint32_t)a & (uint32_t)0x00FF00) >> 8) | (((uint32_t)a & (uint32_t)0x0000FF) << 8)) << 8 | (uint32_t)a >> 0x10)
 
+// host to network & network to host macros
+#ifndef htons
+#define htons(a) byteSwap16(a)
+#endif
+#ifndef ntohs
+#define ntohs(a) byteSwap16(a)
+#endif
+#ifndef htonl
+#define htonl(a) byteReverse32(a)
+#endif
+#ifndef ntohl
+#define ntohl(a) byteReverse32(a)
+#endif
+
+#define convert_hton24(a)  byteReverse24(a)
+
+
+/*Network Initializer.
+ * The function will perform initialization of the network protocols.
+ * 
+ * @param None
+ * 
+ * @param return
+ *      Nothing
+ * 
+ */
 void Network_Init(void);
+
+
+/*Reading Packets.
+ * The function will read the packets in the network.
+ * 
+ * @param None
+ * 
+ * @param return
+ *      Nothing
+ * 
+ */
 void Network_Read(void);
+
+
+/*Managing Packets.
+ * The function will handle the packets in the network .
+ * 
+ * @param None
+ * 
+ * @param return
+ *      Nothing
+ * 
+ */
 void Network_Manage(void);
+
+
+/*Wait for limk.
+ * The function will wait for the link by reading PHY registers.
+ * 
+ * @param None
+ * 
+ * @param return
+ *      Nothing
+ * 
+ */
 void Network_WaitForLink(void);
-void timersInit();
+uint16_t Network_GetStartPosition(void);
+
+void timersInit(void);
+
+
 
 #endif	/* NETWORK_H */
 

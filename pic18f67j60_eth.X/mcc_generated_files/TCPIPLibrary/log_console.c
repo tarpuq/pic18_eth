@@ -1,17 +1,17 @@
 /**
-  Syslog API Header File
+ Sending log messages to console
 	
   Company:
     Microchip Technology Inc.
 
   File Name:
-    syslog.h
+    log_console.c
 
   Summary:
-    Header file for the Syslog implementation
+    Implementation for logging log messages to console
 
   Description:
-    This header file provides APIs for the Syslog implementation.
+    This source file provides the implementation of the APIs for message logging to the console.
 
  */
 
@@ -37,11 +37,29 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 
 */
 
-#ifndef SYSLOG_H
-#define	SYSLOG_H
+/**
+ Section: Included Files
+ */
 
-void SYSLOG_Init(void);
-void SYSLOG_Write(const char *message);
 
-#endif	/* SYSLOG_H */
+#include <xc.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdint.h>
+#include "log.h"
+#include "ip_database.h"
 
+
+uint8_t logConsole(const char *message, uint8_t priorityVal)
+{
+    struct tm * SYSLOG_time1;   
+    time_t time1;   
+    unsigned long ip;
+    
+    ip = ipdb_getAddress();   
+    time1 = time(NULL);
+    SYSLOG_time1 = gmtime(&time1); 
+        
+    printf("<%d>%d %d-%.2d-%.2dT%.2d:%.2d:%.2dZ %d.%d.%d.%d %s %s %s %s[%s]\r\n", priorityVal, SYSLOG_VERSION, SYSLOG_time1->tm_year, SYSLOG_time1->tm_mon, SYSLOG_time1->tm_mday, SYSLOG_time1->tm_hour, SYSLOG_time1->tm_min, SYSLOG_time1->tm_sec, ((char*)&ip)[3],((char*)&ip)[2],((char*)&ip)[1],((char*)&ip)[0], LOG_NILVALUE, LOG_NILVALUE, LOG_NILVALUE, LOG_NILVALUE, message);
+    return 1;
+}

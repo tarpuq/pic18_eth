@@ -43,6 +43,7 @@ MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF THESE TER
 /**
   Section: Included Files
 */
+#include <stdbool.h>
 #include "tcpip_types.h"
 
 #define TCP_FIN_FLAG 0x01U
@@ -125,7 +126,7 @@ typedef struct
     tcpBufferState_t txBufState;
     uint16_t bytesSent;
     bool payloadSave;
-    
+
     tcp_fsm_states_t fsmState;      // connection state
     tcpEvent_t connectionEvent;
 
@@ -143,54 +144,54 @@ typedef struct
 
 typedef enum
 {
-TCP_EOP = 0u,        // lenght = 0   End of Option List,[RFC793]
-TCP_NOP = 1u,        // lenght = 0   No-Operation,[RFC793]
-TCP_MSS = 2u,        // lenght = 4   Maximum Segment Size,[RFC793]
+TCP_EOP = 0u,        // length = 0   End of Option List,[RFC793]
+TCP_NOP = 1u,        // length = 0   No-Operation,[RFC793]
+TCP_MSS = 2u,        // length = 4   Maximum Segment Size,[RFC793]
 
 // this options are not implemented
 #ifdef ALL_TCP_HEADER_OPTIONS
-TCP_WIN_SCALE = 3,  // lenght = 3   Window Scale,[RFC7323]
-TCP_SACK = 4,       // lenght = 2   SACK Permitted,[RFC2018]
+TCP_WIN_SCALE = 3,  // length = 3   Window Scale,[RFC7323]
+TCP_SACK = 4,       // length = 2   SACK Permitted,[RFC2018]
 
-5                   // lenght = N   SACK,[RFC2018]
-6                   // lenght = 6   Echo (obsoleted by option 8),[RFC1072][RFC6247]
-7                   // lenght = 6   Echo Reply (obsoleted by option 8),[RFC1072][RFC6247]
-8                   // lenght = 10  Timestamps,[RFC7323]
-9                   // lenght = 2   Partial Order Connection Permitted (obsolete),[RFC1693][RFC6247]
-10                  // lenght = 3   Partial Order Service Profile (obsolete),[RFC1693][RFC6247]
-11                  // lenght = 0   CC (obsolete),[RFC1644][RFC6247]
-12                  // lenght = 0   CC.NEW (obsolete),[RFC1644][RFC6247]
-13                  // lenght = 0   CC.ECHO (obsolete),[RFC1644][RFC6247]
-14                  // lenght = 3   TCP Alternate Checksum Request (obsolete),[RFC1146][RFC6247]
-15                  // lenght = N   TCP Alternate Checksum Data (obsolete),[RFC1146][RFC6247]
-16                  // lenght = 0   Skeeter,[Stev_Knowles]
-17                  // lenght = 0   Bubba,[Stev_Knowles]
-18                  // lenght = 3   Trailer Checksum Option,[Subbu_Subramaniam][Monroe_Bridges]
-19                  // lenght = 18  MD5 Signature Option (obsoleted by option 29),[RFC2385]
-20                  // lenght = 0   SCPS Capabilities,[Keith_Scott]
-21                  // lenght = 0   Selective Negative Acknowledgements,[Keith_Scott]
-22                  // lenght = 0   Record Boundaries,[Keith_Scott]
-23                  // lenght = 0   Corruption experienced,[Keith_Scott]
-24                  // lenght = 0   SNAP,[Vladimir_Sukonnik]
-25                  // lenght = 0   Unassigned (released 2000-12-18),
-26                  // lenght = 0   TCP Compression Filter,[Steve_Bellovin]
-27                  // lenght = 8   Quick-Start Response,[RFC4782]
-28                  // lenght = 4   "User Timeout Option (also, other known unauthorized use) [***][1]",[RFC5482]
-29                  // lenght = 0   TCP Authentication Option (TCP-AO),[RFC5925]
-30                  // lenght = N   Multipath TCP (MPTCP),[RFC6824]
-31                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-32                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-33                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-34-75               // lenght = 0   Reserved,
-69                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-70                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-71-75               // lenght = 0   Reserved,
-76                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-77                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-78                  // lenght = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
-79-252              // lenght = 0   Reserved,
-253                 // lenght = N   "RFC3692-style Experiment 1 (also improperly used for shipping products) [*]",[RFC4727]
-254                 // lenght = N   "RFC3692-style Experiment 2 (also improperly used for shipping products) [*]",[RFC4727]"
+5                   // length = N   SACK,[RFC2018]
+6                   // length = 6   Echo (obsoleted by option 8),[RFC1072][RFC6247]
+7                   // length = 6   Echo Reply (obsoleted by option 8),[RFC1072][RFC6247]
+8                   // length = 10  Timestamps,[RFC7323]
+9                   // length = 2   Partial Order Connection Permitted (obsolete),[RFC1693][RFC6247]
+10                  // length = 3   Partial Order Service Profile (obsolete),[RFC1693][RFC6247]
+11                  // length = 0   CC (obsolete),[RFC1644][RFC6247]
+12                  // length = 0   CC.NEW (obsolete),[RFC1644][RFC6247]
+13                  // length = 0   CC.ECHO (obsolete),[RFC1644][RFC6247]
+14                  // length = 3   TCP Alternate Checksum Request (obsolete),[RFC1146][RFC6247]
+15                  // length = N   TCP Alternate Checksum Data (obsolete),[RFC1146][RFC6247]
+16                  // length = 0   Skeeter,[Stev_Knowles]
+17                  // length = 0   Bubba,[Stev_Knowles]
+18                  // length = 3   Trailer Checksum Option,[Subbu_Subramaniam][Monroe_Bridges]
+19                  // length = 18  MD5 Signature Option (obsoleted by option 29),[RFC2385]
+20                  // length = 0   SCPS Capabilities,[Keith_Scott]
+21                  // length = 0   Selective Negative Acknowledgements,[Keith_Scott]
+22                  // length = 0   Record Boundaries,[Keith_Scott]
+23                  // length = 0   Corruption experienced,[Keith_Scott]
+24                  // length = 0   SNAP,[Vladimir_Sukonnik]
+25                  // length = 0   Unassigned (released 2000-12-18),
+26                  // length = 0   TCP Compression Filter,[Steve_Bellovin]
+27                  // length = 8   Quick-Start Response,[RFC4782]
+28                  // length = 4   "User Timeout Option (also, other known unauthorized use) [***][1]",[RFC5482]
+29                  // length = 0   TCP Authentication Option (TCP-AO),[RFC5925]
+30                  // length = N   Multipath TCP (MPTCP),[RFC6824]
+31                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+32                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+33                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+34-75               // length = 0   Reserved,
+69                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+70                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+71-75               // length = 0   Reserved,
+76                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+77                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+78                  // length = 0   Reserved (known unauthorized use without proper IANA assignment) [**],
+79-252              // length = 0   Reserved,
+253                 // length = N   "RFC3692-style Experiment 1 (also improperly used for shipping products) [*]",[RFC4727]
+254                 // length = N   "RFC3692-style Experiment 2 (also improperly used for shipping products) [*]",[RFC4727]"
 #endif
 }tcp_options_t;
 
@@ -205,10 +206,11 @@ TCP_SACK = 4,       // lenght = 2   SACK Permitted,[RFC2018]
  * 
  * @param None
  * 
- * @return
- *      None
- *  */
-void TCP_Init(void); // init the tcp structures
+ * @param return
+ *      Nothing
+ * 
+ */
+void TCP_Init(void);
 
 
 /** Initialize the TCB and add it to the list of TCB pointers.
@@ -224,7 +226,7 @@ void TCP_Init(void); // init the tcp structures
  * @return
  *       0 if the insertion was successful.
  */
-tcbError_t TCP_SocketInit(tcpTCB_t *tcb_ptr);
+error_msg TCP_SocketInit(tcpTCB_t *tcb_ptr);   //jira: CAE_MCU8-5647
 
 
 /** Remove the socket pointer from the TCP Stack, actually the pointer will be
@@ -239,7 +241,7 @@ tcbError_t TCP_SocketInit(tcpTCB_t *tcb_ptr);
  * @return
  *       0 if the removing was successful.
  */
-tcbError_t TCP_SocketRemove(tcpTCB_t *tcb_ptr);
+error_msg TCP_SocketRemove(tcpTCB_t *tcb_ptr);
 
 
 /** The function will provide an interface to read the status of the socket.
@@ -270,7 +272,7 @@ socketState_t TCP_SocketPoll(tcpTCB_t *tcbPtr);
  * @return
  *      false - The initialization fails 
  */
-bool TCP_Bind(tcpTCB_t *tcbPtr, uint16_t port);
+error_msg TCP_Bind(tcpTCB_t *tcbPtr, uint16_t port);    //jira: CAE_MCU8-5647
 
 
 /** Listen for connections on a socket.
@@ -288,7 +290,7 @@ bool TCP_Bind(tcpTCB_t *tcbPtr, uint16_t port);
  * @return
  *      false - The starting of the server fails
  */
-bool TCP_Listen(tcpTCB_t *tcbPtr);
+error_msg TCP_Listen(tcpTCB_t *tcbPtr);    //jira: CAE_MCU8-5647
 
 
 /** Start the client for a particular socket.
@@ -304,7 +306,7 @@ bool TCP_Listen(tcpTCB_t *tcbPtr);
  * @return
  *      false - The starting of the server fails
  */
-bool TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in_t *srvaddr);
+error_msg TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in4_t *srvaddr);    //jira: CAE_MCU8-5647
 
 
 /** Close the TCP connection.
@@ -318,7 +320,7 @@ bool TCP_Connect(tcpTCB_t *tcbPtr, sockaddr_in_t *srvaddr);
  * @return
  *      false - The Close procedure fails
  */
-bool TCP_Close(tcpTCB_t *tcbPtr);
+error_msg TCP_Close(tcpTCB_t *tcbPtr);     //jira: CAE_MCU8-5647
 
 
 /** Send a buffer to a remote machine using a TCP connection.
@@ -333,7 +335,7 @@ bool TCP_Close(tcpTCB_t *tcbPtr);
  * @return
  *      false - Adding the buffer to the socket fails
  */
-bool TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen);
+error_msg TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen);    //jira: CAE_MCU8-5647
 
 
 /** Check if the TX buffer was send.
@@ -348,7 +350,7 @@ bool TCP_Send(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen);
  * @return
  *      false - Buffer transmission fails or wasn't sent yet.
  */
-bool TCP_SendDone(tcpTCB_t *tcbPtr);
+error_msg TCP_SendDone(tcpTCB_t *tcbPtr);    //jira: CAE_MCU8-5647
 
 
 /** Will add the RX buffer to the socket.
@@ -367,7 +369,7 @@ bool TCP_SendDone(tcpTCB_t *tcbPtr);
  * @return
  *      false - passing of the buffer to the socket failed.
  */
-bool TCP_InsertRxBuffer(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen);
+error_msg TCP_InsertRxBuffer(tcpTCB_t *tcbPtr, uint8_t *data, uint16_t dataLen);    //jira: CAE_MCU8-5647
 
 
 /** This function will read the available data from the socket.

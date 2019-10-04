@@ -1,5 +1,3 @@
-// rtcc.c
-
 /*********************************************************************
 * Software License Agreement:
 *
@@ -26,15 +24,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "rtcc.h"
-#include "../tmr1.h"
+#include "../mcc.h"
 
 #warning USING TIMER1 FOR TIMEBASE
 
-volatile time_t device_time;
+volatile time_t deviceTime;
+volatile bool dirtyTime;
 
-/****************************************************************************
-  Function:
-    void rtcc_init(void)
+volatile uint16_t seconds_counter;
+/******************************************************************************
 
   Summary:
     Initialize the clock calendar driver.
@@ -61,7 +59,7 @@ volatile time_t device_time;
   ***************************************************************************/
 void rtcc_init(void)
 {
-    device_time = 1293861600; // Jan 1 2011
+    deviceTime = 1293861600;
     TMR1_SetInterruptHandler(rtcc_handler);
 }
 
@@ -70,10 +68,10 @@ void rtcc_init(void)
     void rtcc_handler(void) (TMR1 version)
 
   Summary:
-    maintain device_time (seconds) using the LCDIF flag/interrupt.
+    maintain deviceTime (seconds) using the LCDIF flag/interrupt.
 
   Description:
-    This function decrements seconds_counter until 0 and then increments device_time.
+    This function decrements seconds_counter until 0 and then increments deviceTime.
     seconds_counter reloads with CLOCK_PER_SEC.
     This version of the function uses Timer 1 as the time base.
     Timer 1 is reloaded with 0x8000 to cause TMR1IF to overflow every second.
@@ -94,7 +92,7 @@ void rtcc_init(void)
 
 void rtcc_handler(void)
 {
-        device_time++;
+	deviceTime++;
 }
 
 
@@ -126,9 +124,9 @@ void rtcc_handler(void)
 void rtcc_set(time_t *t)
 {
     bool gie_val;
-    gie_val = GIE;
-    GIE = 0;
-    device_time = *t;
+    gie_val = (bool)GIE;
+    INTERRUPT_GlobalInterruptDisable();
+    deviceTime = *t;
     GIE = gie_val;
 }
 
@@ -165,9 +163,9 @@ time_t time(time_t *t)
     bool   gie_val;
     time_t  the_time;
     
-    gie_val = GIE;
-    GIE = 0;
-    the_time = device_time;
+    gie_val = (bool)GIE;  //jira: CAE_MCU8-5647
+    INTERRUPT_GlobalInterruptDisable();
+    the_time = deviceTime;
     GIE = gie_val;
 
     if(t)
@@ -177,3 +175,5 @@ time_t time(time_t *t)
 
     return (the_time);
 }
+
+
